@@ -8,8 +8,9 @@ app = Flask(__name__)
 # Conexión a la base de datos
 db_url = os.environ.get("DATABASE_URL", "sqlite:///local.db")
 if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+    db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+elif db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 db = SQLAlchemy(app)
 
