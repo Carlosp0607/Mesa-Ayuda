@@ -1,5 +1,7 @@
 # Mesa de Ayuda
 
+**Enfoque:** backend en Python, API REST y procesos de soporte tecnológico (SLA, escalamiento, base de conocimiento).
+
 Sistema de tickets de soporte técnico con API en Flask, base de datos PostgreSQL y análisis de indicadores (SLA, escalamiento, incidentes recurrentes).
 
 **Demo:** https://mesa-ayuda-4wfr.onrender.com
@@ -14,7 +16,7 @@ Sistema de tickets de soporte técnico con API en Flask, base de datos PostgreSQ
 
 ## Tecnologías
 
-Python · Flask · Flask-SQLAlchemy · PostgreSQL (Aiven) · Render · Excel / Power BI
+Python · Flask · Flask-SQLAlchemy · PostgreSQL (Aiven) · Render · Excel
 
 ## Endpoints
 
