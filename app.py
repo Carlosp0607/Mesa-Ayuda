@@ -34,16 +34,27 @@ VALORES = {
 }
 
 # Textos y colores para la interfaz
-ETIQUETAS_ESTADO = {"abierto": "Abierto", "en_proceso": "En proceso", "escalado": "Escalado", "cerrado": "Cerrado"}
-COLOR_ESTADO = {"abierto": "primary", "en_proceso": "warning", "escalado": "danger", "cerrado": "success"}
+ETIQUETAS_ESTADO = {
+    "abierto": "Abierto", "en_proceso": "En proceso", "escalado": "Escalado",
+    "cerrado": "Cerrado", "anulado": "Anulado",
+}
+COLOR_ESTADO = {
+    "abierto": "primary", "en_proceso": "warning", "escalado": "danger",
+    "cerrado": "success", "anulado": "dark",
+}
 COLOR_PRIORIDAD = {"alta": "danger", "media": "warning", "baja": "secondary"}
 EVENTOS = {
     "creado": {"nombre": "Ticket creado", "icono": "bi-plus-lg", "color": "primary"},
     "atendido": {"nombre": "En atención (nivel 1)", "icono": "bi-person-check", "color": "warning"},
     "escalado": {"nombre": "Escalado a nivel 2", "icono": "bi-arrow-up", "color": "danger"},
     "comentario": {"nombre": "Seguimiento", "icono": "bi-chat-left-text", "color": "secondary"},
+    "editado": {"nombre": "Ticket editado", "icono": "bi-pencil", "color": "info"},
     "cerrado": {"nombre": "Solución", "icono": "bi-check-lg", "color": "success"},
+    "anulado": {"nombre": "Ticket anulado", "icono": "bi-x-lg", "color": "dark"},
 }
+
+# Estados en los que el ticket ya no se puede modificar
+ESTADOS_FINALES = ["cerrado", "anulado"]
 
 # La base guarda la hora en UTC; la interfaz la muestra en hora de Colombia
 HORAS_COLOMBIA = -5
@@ -105,6 +116,8 @@ def estado_sla(t):
 
 def info_sla(t):
     vence_en, cumplido = estado_sla(t)
+    if t.estado == "anulado":
+        return {"texto": "No aplica", "color": "secondary", "vence": vence_en}
     if t.estado == "cerrado":
         if cumplido:
             return {"texto": "Cumplido", "color": "success", "vence": vence_en}
@@ -158,6 +171,56 @@ def linea_de_tiempo(t):
 # Acciones del flujo de soporte. Las usan la API y la interfaz web.
 # Devuelven un mensaje de error, o None si todo salió bien.
 
+CAMPOS_TICKET = ["titulo", "descripcion", "tipo", "categoria", "prioridad"]
+
+
+def validar_datos(datos):
+    if any(not datos.get(c) for c in CAMPOS_TICKET):
+        return "Completa todos los campos"
+    if any(datos[c] not in VALORES[c] for c in VALORES):
+        return "Hay un valor no válido en el formulario"
+    return None
+
+
+def accion_editar(t, datos):
+    if t.estado in ESTADOS_FINALES:
+        return f"No se puede editar un ticket {t.estado}"
+    error = validar_datos(datos)
+    if error:
+        return error
+
+    cambios = []
+    if datos["titulo"] != t.titulo:
+        cambios.append(f"Título: {t.titulo} → {datos['titulo']}")
+    if datos["descripcion"] != t.descripcion:
+        cambios.append("Descripción actualizada")
+    nombres = {"tipo": "Tipo", "categoria": "Categoría", "prioridad": "Prioridad"}
+    for campo, nombre in nombres.items():
+        if datos[campo] != getattr(t, campo):
+            cambios.append(f"{nombre}: {getattr(t, campo)} → {datos[campo]}")
+    if datos["prioridad"] != t.prioridad:
+        cambios.append(f"Nuevo límite de SLA: {SLA_HORAS[datos['prioridad']]} h desde la creación")
+    if not cambios:
+        return "No hubo cambios para guardar"
+
+    for campo in CAMPOS_TICKET:
+        setattr(t, campo, datos[campo])
+    registrar(t, "editado", "\n".join(cambios))
+    return None
+
+
+def accion_anular(t, motivo):
+    if t.estado == "anulado":
+        return "El ticket ya está anulado"
+    if t.estado == "cerrado":
+        return "No se puede anular un ticket cerrado"
+    if not motivo:
+        return "Para anular el ticket debes escribir el motivo"
+    t.estado = "anulado"
+    registrar(t, "anulado", motivo)
+    return None
+
+
 def accion_atender(t):
     if t.estado != "abierto":
         return f"Solo se atienden tickets abiertos. Estado actual: {t.estado}"
@@ -167,8 +230,8 @@ def accion_atender(t):
 
 
 def accion_escalar(t, motivo=""):
-    if t.estado == "cerrado":
-        return "No se puede escalar un ticket cerrado"
+    if t.estado in ESTADOS_FINALES:
+        return f"No se puede escalar un ticket {t.estado}"
     if t.nivel == 2:
         return "El ticket ya está en nivel 2"
     t.nivel = 2
@@ -180,6 +243,8 @@ def accion_escalar(t, motivo=""):
 def accion_cerrar(t, solucion, documentar):
     if t.estado == "cerrado":
         return "El ticket ya está cerrado"
+    if t.estado == "anulado":
+        return "No se puede cerrar un ticket anulado"
     if not solucion:
         return "Para cerrar el ticket debes escribir la solución"
     t.solucion = solucion
@@ -201,7 +266,7 @@ PLANTILLAS["base.html"] = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block titulo %}Mesa de Ayuda{% endblock %}</title>
+<title>{% block titulo %}Mesa de Ayuda Charles'DPT{% endblock %}</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 <style>
@@ -223,7 +288,7 @@ PLANTILLAS["base.html"] = """
 </head>
 <body>
 <div class="barra-movil d-md-none p-3">
-  <div class="text-white fw-bold mb-2"><i class="bi bi-life-preserver"></i> Mesa de Ayuda</div>
+  <div class="text-white fw-bold mb-2"><i class="bi bi-life-preserver"></i> Mesa de Ayuda <span class="fw-normal text-info">Charles'DPT</span></div>
   <a href="{{ url_for('dashboard') }}">Inicio</a>
   <a href="{{ url_for('panel_tickets') }}">Tickets</a>
   <a href="{{ url_for('panel_nuevo') }}">Nuevo</a>
@@ -231,7 +296,8 @@ PLANTILLAS["base.html"] = """
 </div>
 <div class="d-flex">
   <nav class="sidebar p-3 d-none d-md-block">
-    <div class="text-white fw-bold fs-5 mb-4"><i class="bi bi-life-preserver"></i> Mesa de Ayuda</div>
+    <div class="text-white fw-bold fs-5 mb-4 lh-sm"><i class="bi bi-life-preserver"></i> Mesa de Ayuda
+      <div class="fs-6 fw-normal text-info mt-1 ps-4">Charles'DPT</div></div>
     <a href="{{ url_for('panel_nuevo') }}" class="btn-nuevo"><i class="bi bi-plus-lg me-1"></i>Nuevo ticket</a>
     <a href="{{ url_for('dashboard') }}" class="{{ 'activo' if seccion == 'inicio' }}"><i class="bi bi-speedometer2 me-2"></i>Inicio</a>
     <a href="{{ url_for('panel_tickets') }}" class="{{ 'activo' if seccion == 'tickets' }}"><i class="bi bi-ticket-perforated me-2"></i>Tickets</a>
@@ -341,7 +407,7 @@ PLANTILLAS["dashboard.html"] = """
 
 PLANTILLAS["tickets.html"] = """
 {% extends "base.html" %}
-{% block titulo %}Tickets · Mesa de Ayuda{% endblock %}
+{% block titulo %}Tickets · Mesa de Ayuda Charles'DPT{% endblock %}
 {% block contenido %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0">Tickets</h4>
@@ -433,9 +499,14 @@ PLANTILLAS["tickets.html"] = """
 
 PLANTILLAS["nuevo.html"] = """
 {% extends "base.html" %}
-{% block titulo %}Nuevo ticket · Mesa de Ayuda{% endblock %}
+{% block titulo %}{{ 'Editar ticket' if ticket_id else 'Nuevo ticket' }} · Mesa de Ayuda Charles'DPT{% endblock %}
 {% block contenido %}
+{% if ticket_id %}
+<a href="{{ url_for('panel_detalle', ticket_id=ticket_id) }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Volver al ticket</a>
+<h4 class="mt-2 mb-4">Editar ticket #{{ ticket_id }}</h4>
+{% else %}
 <h4 class="mb-4">Nuevo ticket</h4>
+{% endif %}
 <form method="post" class="card shadow-sm" style="max-width: 760px">
   <div class="card-body row g-3">
     <div class="col-12">
@@ -471,8 +542,13 @@ PLANTILLAS["nuevo.html"] = """
       </select>
     </div>
     <div class="col-12 d-flex gap-2">
+      {% if ticket_id %}
+      <button class="btn btn-primary"><i class="bi bi-save"></i> Guardar cambios</button>
+      <a href="{{ url_for('panel_detalle', ticket_id=ticket_id) }}" class="btn btn-outline-secondary">Cancelar</a>
+      {% else %}
       <button class="btn btn-primary"><i class="bi bi-send"></i> Crear ticket</button>
       <a href="{{ url_for('panel_tickets') }}" class="btn btn-outline-secondary">Cancelar</a>
+      {% endif %}
     </div>
   </div>
 </form>
@@ -481,7 +557,7 @@ PLANTILLAS["nuevo.html"] = """
 
 PLANTILLAS["detalle.html"] = """
 {% extends "base.html" %}
-{% block titulo %}Ticket #{{ t.id }} · Mesa de Ayuda{% endblock %}
+{% block titulo %}Ticket #{{ t.id }} · Mesa de Ayuda Charles'DPT{% endblock %}
 {% block contenido %}
 {% set sla = info_sla(t) %}
 <a href="{{ url_for('panel_tickets') }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Volver a tickets</a>
@@ -510,7 +586,7 @@ PLANTILLAS["detalle.html"] = """
         {% endfor %}
       </div>
 
-      {% if t.estado != 'cerrado' %}
+      {% if t.estado not in ESTADOS_FINALES %}
       <form method="post" action="{{ url_for('panel_accion', ticket_id=t.id) }}" class="mt-2">
         <input type="hidden" name="accion" value="comentar">
         <textarea name="texto" class="form-control mb-2" rows="2" placeholder="Agregar seguimiento: qué se revisó, qué se le pidió al usuario..." required></textarea>
@@ -536,9 +612,10 @@ PLANTILLAS["detalle.html"] = """
       </dl>
     </div></div>
 
-    {% if t.estado != 'cerrado' %}
+    {% if t.estado not in ESTADOS_FINALES %}
     <div class="card shadow-sm mb-3"><div class="card-body">
       <h6 class="mb-3">Acciones</h6>
+      <a href="{{ url_for('panel_editar', ticket_id=t.id) }}" class="btn btn-outline-primary w-100 mb-3"><i class="bi bi-pencil"></i> Editar ticket</a>
       {% if t.estado == 'abierto' %}
       <form method="post" action="{{ url_for('panel_accion', ticket_id=t.id) }}" class="mb-3">
         <input type="hidden" name="accion" value="atender">
@@ -561,6 +638,13 @@ PLANTILLAS["detalle.html"] = """
         </div>
         <button class="btn btn-success w-100"><i class="bi bi-check-circle"></i> Cerrar ticket</button>
       </form>
+      <hr>
+      <form method="post" action="{{ url_for('panel_accion', ticket_id=t.id) }}"
+            onsubmit="return confirm('¿Anular este ticket? Queda en el historial pero sale de los indicadores.');">
+        <input type="hidden" name="accion" value="anular">
+        <input name="motivo" class="form-control form-control-sm mb-2" placeholder="Motivo de anulación (obligatorio)" required>
+        <button class="btn btn-outline-dark w-100"><i class="bi bi-x-circle"></i> Anular ticket</button>
+      </form>
     </div></div>
     {% endif %}
 
@@ -582,7 +666,7 @@ PLANTILLAS["detalle.html"] = """
 
 PLANTILLAS["conocimiento.html"] = """
 {% extends "base.html" %}
-{% block titulo %}Base de conocimiento · Mesa de Ayuda{% endblock %}
+{% block titulo %}Base de conocimiento · Mesa de Ayuda Charles'DPT{% endblock %}
 {% block contenido %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0">Base de conocimiento</h4>
@@ -632,6 +716,7 @@ app.jinja_env.loader = DictLoader(PLANTILLAS)
 app.jinja_env.globals.update(
     ETIQUETAS_ESTADO=ETIQUETAS_ESTADO, COLOR_ESTADO=COLOR_ESTADO, COLOR_PRIORIDAD=COLOR_PRIORIDAD,
     EVENTOS=EVENTOS, VALORES=VALORES, SLA_HORAS=SLA_HORAS, info_sla=info_sla,
+    ESTADOS_FINALES=ESTADOS_FINALES,
 )
 
 
@@ -646,7 +731,8 @@ def formato_fecha(d):
 
 @app.route("/")
 def dashboard():
-    tickets = Ticket.query.all()
+    # Los tickets anulados no cuentan en los indicadores
+    tickets = Ticket.query.filter(Ticket.estado != "anulado").all()
     total = len(tickets)
     cerrados = [t for t in tickets if t.estado == "cerrado"]
 
@@ -665,7 +751,7 @@ def dashboard():
         {"nombre": "Escalados a N2", "valor": f"{pct_escalados}%", "color": "#6f42c1"},
     ]
 
-    conteo_estado = {e: 0 for e in ETIQUETAS_ESTADO}
+    conteo_estado = {e: 0 for e in ETIQUETAS_ESTADO if e != "anulado"}
     conteo_categoria = {c: 0 for c in VALORES["categoria"]}
     for t in tickets:
         conteo_estado[t.estado] = conteo_estado.get(t.estado, 0) + 1
@@ -716,14 +802,10 @@ def panel_nuevo():
     if request.method == "GET":
         return render_template("nuevo.html", seccion="tickets", datos={})
 
-    campos = ["titulo", "descripcion", "tipo", "categoria", "prioridad"]
-    datos = {c: request.form.get(c, "").strip() for c in campos}
-
-    if any(not v for v in datos.values()):
-        flash("Completa todos los campos", "danger")
-        return render_template("nuevo.html", seccion="tickets", datos=datos)
-    if any(datos[c] not in VALORES[c] for c in VALORES):
-        flash("Hay un valor no válido en el formulario", "danger")
+    datos = {c: request.form.get(c, "").strip() for c in CAMPOS_TICKET}
+    error = validar_datos(datos)
+    if error:
+        flash(error, "danger")
         return render_template("nuevo.html", seccion="tickets", datos=datos)
 
     ticket = Ticket(**datos)
@@ -746,11 +828,38 @@ def panel_detalle(ticket_id):
     )
 
 
+@app.route("/panel/tickets/<int:ticket_id>/editar", methods=["GET", "POST"])
+def panel_editar(ticket_id):
+    ticket = buscar_ticket(ticket_id)
+    if ticket is None:
+        flash("Ticket no encontrado", "danger")
+        return redirect(url_for("panel_tickets"))
+    if ticket.estado in ESTADOS_FINALES:
+        flash(f"No se puede editar un ticket {ticket.estado}", "danger")
+        return redirect(url_for("panel_detalle", ticket_id=ticket.id))
+
+    if request.method == "GET":
+        datos = {c: getattr(ticket, c) for c in CAMPOS_TICKET}
+        return render_template("nuevo.html", seccion="tickets", datos=datos, ticket_id=ticket.id)
+
+    datos = {c: request.form.get(c, "").strip() for c in CAMPOS_TICKET}
+    error = accion_editar(ticket, datos)
+    if error:
+        db.session.rollback()
+        flash(error, "danger")
+        return render_template("nuevo.html", seccion="tickets", datos=datos, ticket_id=ticket.id)
+
+    db.session.commit()
+    flash("Cambios guardados", "success")
+    return redirect(url_for("panel_detalle", ticket_id=ticket.id))
+
+
 MENSAJES_ACCION = {
     "atender": "El ticket pasó a en proceso",
     "escalar": "El ticket se escaló a nivel 2",
     "cerrar": "Ticket cerrado",
     "comentar": "Seguimiento agregado",
+    "anular": "Ticket anulado",
 }
 
 
@@ -770,9 +879,13 @@ def panel_accion(ticket_id):
         error = accion_cerrar(
             ticket, request.form.get("solucion", "").strip(), request.form.get("documentar") == "si"
         )
+    elif accion == "anular":
+        error = accion_anular(ticket, request.form.get("motivo", "").strip())
     elif accion == "comentar":
         texto = request.form.get("texto", "").strip()
-        if texto:
+        if ticket.estado in ESTADOS_FINALES:
+            error = f"No se pueden agregar seguimientos a un ticket {ticket.estado}"
+        elif texto:
             registrar(ticket, "comentario", texto)
             error = None
         else:
@@ -821,7 +934,7 @@ def panel_conocimiento():
 
 @app.route("/api/estado")
 def inicio():
-    return jsonify({"sistema": "Mesa de Ayuda", "estado": "funcionando"})
+    return jsonify({"sistema": "Mesa de Ayuda Charles'DPT", "estado": "funcionando"})
 
 
 # ---------------- API: TICKETS ----------------
@@ -922,9 +1035,37 @@ def cerrar_ticket(ticket_id):
     return jsonify(ticket_a_dict(ticket))
 
 
+@app.route("/tickets/<int:ticket_id>", methods=["PATCH"])
+def editar_ticket(ticket_id):
+    ticket = buscar_ticket(ticket_id)
+    if ticket is None:
+        return jsonify({"error": "Ticket no encontrado"}), 404
+    datos = request.get_json(silent=True) or {}
+    # Los campos que no se envían conservan su valor actual
+    completos = {c: datos.get(c, getattr(ticket, c)) for c in CAMPOS_TICKET}
+    error = accion_editar(ticket, completos)
+    if error:
+        return jsonify({"error": error}), 400
+    db.session.commit()
+    return jsonify(ticket_a_dict(ticket))
+
+
+@app.route("/tickets/<int:ticket_id>/anular", methods=["PATCH"])
+def anular_ticket(ticket_id):
+    ticket = buscar_ticket(ticket_id)
+    if ticket is None:
+        return jsonify({"error": "Ticket no encontrado"}), 404
+    datos = request.get_json(silent=True) or {}
+    error = accion_anular(ticket, datos.get("motivo"))
+    if error:
+        return jsonify({"error": error}), 400
+    db.session.commit()
+    return jsonify(ticket_a_dict(ticket))
+
+
 @app.route("/tickets/vencidos", methods=["GET"])
 def tickets_vencidos():
-    tickets = Ticket.query.all()
+    tickets = Ticket.query.filter(Ticket.estado != "anulado").all()
     vencidos = [ticket_a_dict(t) for t in tickets if not estado_sla(t)[1]]
     return jsonify(vencidos)
 
@@ -1025,12 +1166,15 @@ def exportar_csv():
     ])
     for t in Ticket.query.order_by(Ticket.id).all():
         horas = round((t.cerrado_en - t.creado_en).total_seconds() / 3600, 1) if t.cerrado_en else ""
-        cumplido = estado_sla(t)[1]
+        if t.estado == "anulado":
+            cumplido = "no aplica"
+        else:
+            cumplido = "si" if estado_sla(t)[1] else "no"
         escritor.writerow([
             t.id, t.titulo, t.tipo, t.categoria, t.prioridad, t.estado, t.nivel,
             t.creado_en.strftime("%Y-%m-%d %H:%M"),
             t.cerrado_en.strftime("%Y-%m-%d %H:%M") if t.cerrado_en else "",
-            horas, SLA_HORAS[t.prioridad], "si" if cumplido else "no",
+            horas, SLA_HORAS[t.prioridad], cumplido,
         ])
     return Response(
         "\ufeff" + salida.getvalue(),
@@ -1049,6 +1193,7 @@ def resumen():
     por_estado = consultar("""
         SELECT estado, COUNT(*) AS total
         FROM tickets
+        WHERE estado <> 'anulado'
         GROUP BY estado
         ORDER BY total DESC
     """)
@@ -1056,6 +1201,7 @@ def resumen():
     por_categoria = consultar("""
         SELECT categoria, COUNT(*) AS total
         FROM tickets
+        WHERE estado <> 'anulado'
         GROUP BY categoria
         ORDER BY total DESC
     """)
@@ -1079,6 +1225,7 @@ def resumen():
     problemas_repetidos = consultar("""
         SELECT titulo, COUNT(*) AS veces
         FROM tickets
+        WHERE estado <> 'anulado'
         GROUP BY titulo
         ORDER BY veces DESC
         LIMIT 5
@@ -1087,6 +1234,7 @@ def resumen():
     escalamiento = consultar("""
         SELECT ROUND(100.0 * SUM(CASE WHEN nivel = 2 THEN 1 ELSE 0 END) / COUNT(*), 1) AS porcentaje_escalados
         FROM tickets
+        WHERE estado <> 'anulado'
     """)
 
     return jsonify({
