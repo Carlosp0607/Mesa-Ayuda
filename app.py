@@ -288,7 +288,7 @@ PLANTILLAS["base.html"] = """
 </head>
 <body>
 <div class="barra-movil d-md-none p-3">
-  <div class="text-white fw-bold mb-2"><i class="bi bi-life-preserver"></i> Mesa de Ayuda <span class="fw-normal text-info">Charles'DPT</span></div>
+  <div class="text-white fw-bold mb-2"><i class="bi bi-life-preserver"></i> Mesa de Ayuda <span class="fw-normal text-info">Carlos Daniel</span></div>
   <a href="{{ url_for('dashboard') }}">Inicio</a>
   <a href="{{ url_for('panel_tickets') }}">Tickets</a>
   <a href="{{ url_for('panel_nuevo') }}">Nuevo</a>
@@ -297,7 +297,7 @@ PLANTILLAS["base.html"] = """
 <div class="d-flex">
   <nav class="sidebar p-3 d-none d-md-block">
     <div class="text-white fw-bold fs-5 mb-4 lh-sm"><i class="bi bi-life-preserver"></i> Mesa de Ayuda
-      <div class="fs-6 fw-normal text-info mt-1 ps-4">Charles'DPT</div></div>
+      <div class="fs-6 fw-normal text-info mt-1 ps-4">Carlos Daniel</div></div>
     <a href="{{ url_for('panel_nuevo') }}" class="btn-nuevo"><i class="bi bi-plus-lg me-1"></i>Nuevo ticket</a>
     <a href="{{ url_for('dashboard') }}" class="{{ 'activo' if seccion == 'inicio' }}"><i class="bi bi-speedometer2 me-2"></i>Inicio</a>
     <a href="{{ url_for('panel_tickets') }}" class="{{ 'activo' if seccion == 'tickets' }}"><i class="bi bi-ticket-perforated me-2"></i>Tickets</a>
@@ -407,7 +407,7 @@ PLANTILLAS["dashboard.html"] = """
 
 PLANTILLAS["tickets.html"] = """
 {% extends "base.html" %}
-{% block titulo %}Tickets · Mesa de Ayuda Charles'DPT{% endblock %}
+{% block titulo %}Tickets · Mesa de Ayuda Carlos Daniel{% endblock %}
 {% block contenido %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0">Tickets</h4>
@@ -499,7 +499,7 @@ PLANTILLAS["tickets.html"] = """
 
 PLANTILLAS["nuevo.html"] = """
 {% extends "base.html" %}
-{% block titulo %}{{ 'Editar ticket' if ticket_id else 'Nuevo ticket' }} · Mesa de Ayuda Charles'DPT{% endblock %}
+{% block titulo %}{{ 'Editar ticket' if ticket_id else 'Nuevo ticket' }} · Mesa de Ayuda Carlos Daniel{% endblock %}
 {% block contenido %}
 {% if ticket_id %}
 <a href="{{ url_for('panel_detalle', ticket_id=ticket_id) }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Volver al ticket</a>
@@ -557,7 +557,7 @@ PLANTILLAS["nuevo.html"] = """
 
 PLANTILLAS["detalle.html"] = """
 {% extends "base.html" %}
-{% block titulo %}Ticket #{{ t.id }} · Mesa de Ayuda Charles'DPT{% endblock %}
+{% block titulo %}Ticket #{{ t.id }} · Mesa de Ayuda Carlos Daniel{% endblock %}
 {% block contenido %}
 {% set sla = info_sla(t) %}
 <a href="{{ url_for('panel_tickets') }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Volver a tickets</a>
@@ -666,7 +666,7 @@ PLANTILLAS["detalle.html"] = """
 
 PLANTILLAS["conocimiento.html"] = """
 {% extends "base.html" %}
-{% block titulo %}Base de conocimiento · Mesa de Ayuda Charles'DPT{% endblock %}
+{% block titulo %}Base de conocimiento · Mesa de Ayuda Carlos Daniel{% endblock %}
 {% block contenido %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0">Base de conocimiento</h4>
@@ -934,7 +934,7 @@ def panel_conocimiento():
 
 @app.route("/api/estado")
 def inicio():
-    return jsonify({"sistema": "Mesa de Ayuda Charles'DPT", "estado": "funcionando"})
+    return jsonify({"sistema": "Mesa de Ayuda Carlos Daniel", "estado": "funcionando"})
 
 
 # ---------------- API: TICKETS ----------------
